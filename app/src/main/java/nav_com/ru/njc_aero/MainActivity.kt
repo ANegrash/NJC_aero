@@ -1,12 +1,12 @@
 package nav_com.ru.njc_aero
 
-import androidx.appcompat.app.AppCompatActivity
+import android.content.Context
+import android.graphics.Color
+import android.graphics.drawable.AnimationDrawable
 import android.os.Bundle
-import android.util.Log
 import android.view.View
-import android.widget.Button
-import android.widget.ListView
-import android.widget.Toast
+import android.widget.*
+import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
 import com.google.android.material.button.MaterialButton
 import com.google.gson.Gson
@@ -17,27 +17,36 @@ import okhttp3.Callback
 import okhttp3.Response
 import java.io.IOException
 
+const val PREFS_NAME = "nav-com.njc"
+const val KEY_TYPE = "prefs.selected_mode"
+
 class MainActivity : AppCompatActivity() {
+
+    private val sharedPrefs by lazy {  getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     val _DEPARTURE = 1
     val _ARRIVAL = 2
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        window.statusBarColor = Color.parseColor("#0E1D31")
 
-        replaceSelectionButtons(_DEPARTURE)
-        loadList(_DEPARTURE)
+        loadList(getSelectedMode())
 
         val dep = findViewById<Button>(R.id.departureBtn)
         val arr = findViewById<Button>(R.id.arriveBtn)
+        val reload = findViewById<ImageButton>(R.id.reload_btn)
 
         dep.setOnClickListener {
             loadList(_DEPARTURE)
-            replaceSelectionButtons(_DEPARTURE)
         }
 
         arr.setOnClickListener {
             loadList(_ARRIVAL)
-            replaceSelectionButtons(_ARRIVAL)
+        }
+
+        reload.setOnClickListener {
+            loadList(getSelectedMode())
         }
 
     }
@@ -45,23 +54,25 @@ class MainActivity : AppCompatActivity() {
     private fun loadList(
         flightType: Int
     ) {
+        replaceSelectionButtons(flightType)
         setVisibleFrame(0, 1, 0)
+
         val listView = findViewById<ListView>(R.id.flight_list)
 
         val sendRequest = SendRequest()
         var url = "https://nav-com.ru/njc/api/v1.php?q="
 
         url += if (flightType == _DEPARTURE)
-            "getDepartureShedule"
+            "getDepartureSchedule"
         else
-            "getArriveShedule"
+            "getArriveSchedule"
 
         sendRequest.run(
             url,
             object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
                     runOnUiThread {
-
+                        setError()
                     }
                 }
 
@@ -83,7 +94,7 @@ class MainActivity : AppCompatActivity() {
                                     listOfFlights
                                 )
                                 listView.adapter = flightAdapter
-                            } else {
+                            } else if (flightType == _ARRIVAL) {
                                 val flightAdapter = FlightsAdapter(
                                     this@MainActivity,
                                     R.layout.flight_item_arrive,
@@ -97,7 +108,7 @@ class MainActivity : AppCompatActivity() {
 
                     } else {
                         runOnUiThread {
-
+                            setError(responsedBody.code, responsedBody.info.toString())
                         }
                     }
                 }
@@ -107,8 +118,11 @@ class MainActivity : AppCompatActivity() {
     private fun replaceSelectionButtons(
         buttonNumber: Int
     ) {
+        saveSelectedMode(buttonNumber)
+
         val dep = findViewById<Button>(R.id.departureBtn)
         val arr = findViewById<Button>(R.id.arriveBtn)
+
         if (buttonNumber == _DEPARTURE){
             dep.setBackgroundColor(resources.getColor(R.color.primary))
             dep.setTextColor(resources.getColor(R.color.secondary))
@@ -136,6 +150,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun setError(
+        errorCode: Int = 500,
+        errorText: String = "Сервис временно недоступен"
+    ) {
+        val errortw = findViewById<TextView>(R.id.error_tw)
+
+        errortw.text = "Ошибка $errorCode: $errorText"
+
+        setVisibleFrame(0, 0, 1)
+    }
+
     private fun setVisibleFrame(
         mainVisible: Int = 1,
         loadingVisible: Int = 0,
@@ -150,9 +175,20 @@ class MainActivity : AppCompatActivity() {
             1 -> mainContent.visibility = View.VISIBLE
         }
 
+        val imageView = findViewById<ImageView>(R.id.imageView3)
+        imageView.setBackgroundResource(R.drawable.loading_na)
+
+        val animationLoading : AnimationDrawable = imageView.background as AnimationDrawable
+
         when (loadingVisible) {
-            0 -> loadingContent.visibility = View.GONE
-            1 -> loadingContent.visibility = View.VISIBLE
+            0 -> {
+                animationLoading.stop()
+                loadingContent.visibility = View.GONE
+            }
+            1 -> {
+                animationLoading.start()
+                loadingContent.visibility = View.VISIBLE
+            }
         }
 
         when (errorVisible) {
@@ -160,4 +196,9 @@ class MainActivity : AppCompatActivity() {
             1 -> errorContent.visibility = View.VISIBLE
         }
     }
+
+    private fun getSelectedMode() = sharedPrefs.getInt(KEY_TYPE, _DEPARTURE)
+
+    private fun saveSelectedMode (mode: Int) = sharedPrefs.edit().putInt(KEY_TYPE, mode).apply()
+
 }

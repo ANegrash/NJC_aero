@@ -10,4 +10,6 @@
     <color name="accent">#FFBB86FC</color>
     <color name="white">@color/primary</color>
     <color name="black">@color/secondary</color>
+    <color name="abs_white">#FFF</color>
+    <color name="gray">#7D7F7D</color>
 </resources>
